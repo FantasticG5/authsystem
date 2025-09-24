@@ -426,3 +426,5 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+/authsystem/appsettings.json
+/authsystem/appsettings.Development.json
