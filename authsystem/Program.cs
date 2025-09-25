@@ -36,7 +36,6 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 var app = builder.Build();
 
 app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
-app.UseAuthentication();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {

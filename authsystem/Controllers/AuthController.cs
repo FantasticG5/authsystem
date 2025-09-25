@@ -23,4 +23,15 @@ public class AuthController(IAuthService authService) : ControllerBase
 
         return Ok("User registered successfully.");
     }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        var result = await _authService.LogoutAsync();
+
+        if (!result.Succeeded)
+            return StatusCode(500, result.Error);
+
+        return NoContent();
+    }
 }
