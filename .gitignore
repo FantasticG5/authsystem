@@ -428,3 +428,4 @@ FodyWeavers.xsd
 *.msp
 /authsystem/appsettings.json
 /authsystem/appsettings.Development.json
+/authsystem/appsettings.json
