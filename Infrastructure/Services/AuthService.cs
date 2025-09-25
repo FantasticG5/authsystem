@@ -3,17 +3,14 @@ using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Infrastructure.Models;
 using Microsoft.AspNetCore.Identity;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Infrastructure.Services;
 
-public class AuthService(UserManager<ApplicationUser> userManager) : IAuthService
+public class AuthService(UserManager<ApplicationUser> userManager,
+                   SignInManager<ApplicationUser> signInManager) : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
 
     public async Task<AuthServiceResult> RegisterAsync(RegisterRequest request)
     {
@@ -37,13 +34,20 @@ public class AuthService(UserManager<ApplicationUser> userManager) : IAuthServic
 
         var result = await _userManager.CreateAsync(user, request.Password);
 
-
         string errorMessage = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
 
         return result.Succeeded
-        ? new AuthServiceResult { Succeeded = true }
-        : new AuthServiceResult { Succeeded = false, Error = errorMessage, Message = "Failed to create user, debuga för mer info" };
-
+            ? new AuthServiceResult { Succeeded = true }
+            : new AuthServiceResult { Succeeded = false, Error = errorMessage, Message = "Failed to create user, debuga för mer info" };
     }
 
+    public async Task<AuthServiceResult> LogoutAsync()
+    {
+        await _signInManager.SignOutAsync();
+        return new AuthServiceResult
+        {
+            Succeeded = true,
+            Message = "Signed out"
+        };
+    }
 }
