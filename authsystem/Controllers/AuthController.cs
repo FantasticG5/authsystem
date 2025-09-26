@@ -1,4 +1,5 @@
-﻿using Infrastructure.Dtos;
+﻿using Data.Entities;
+using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -8,11 +9,11 @@ namespace authsystem.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController(IAuthService authService, SignInManager<IdentityUser> signInManager, UserManager<IdentityUser> userManager) : ControllerBase
+public class AuthController(IAuthService authService, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
-    private readonly SignInManager<IdentityUser> _signInManager = signInManager;
-    private readonly UserManager<IdentityUser> _userManager = userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
 
 
 
@@ -35,12 +36,8 @@ public class AuthController(IAuthService authService, SignInManager<IdentityUser
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null)
-            return Unauthorized("Invalid credentials.");
+        var result = await _authService.LoginAsync(request);
 
-        var result = await _signInManager.PasswordSignInAsync(user, request.Password, isPersistent: false,      
-         lockoutOnFailure: false);
 
         if (!result.Succeeded)
             return Unauthorized("Invalid credentials.");
