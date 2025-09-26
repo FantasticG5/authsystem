@@ -36,6 +36,9 @@ public class AuthService(UserManager<ApplicationUser> userManager,
 
         string errorMessage = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
 
+
+        await _signInManager.SignInAsync(user, isPersistent: false);
+
         return result.Succeeded
             ? new AuthServiceResult { Succeeded = true }
             : new AuthServiceResult { Succeeded = false, Error = errorMessage, Message = "Failed to create user, debuga för mer info" };
