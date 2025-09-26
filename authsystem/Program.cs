@@ -56,7 +56,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 var app = builder.Build();
 
-app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {

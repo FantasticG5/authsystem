@@ -1,15 +1,21 @@
-﻿using Infrastructure.Dtos;
+﻿using Data.Entities;
+using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace authsystem.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class AuthController(IAuthService authService) : ControllerBase
+public class AuthController(IAuthService authService, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager) : ControllerBase
 {
     private readonly IAuthService _authService = authService;
+    private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
+    private readonly UserManager<ApplicationUser> _userManager = userManager;
+
+
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
@@ -22,6 +28,22 @@ public class AuthController(IAuthService authService) : ControllerBase
         }
 
         return Ok("User registered successfully.");
+    }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login(LoginRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _authService.LoginAsync(request);
+
+
+        if (!result.Succeeded)
+            return Unauthorized("Invalid credentials.");
+
+        // Här skapas en auth-cookie automatiskt
+        return Ok("Login successful.");
     }
 
     [HttpPost("logout")]
