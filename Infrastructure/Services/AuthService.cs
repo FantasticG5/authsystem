@@ -41,6 +41,33 @@ public class AuthService(UserManager<ApplicationUser> userManager,
             : new AuthServiceResult { Succeeded = false, Error = errorMessage, Message = "Failed to create user, debuga för mer info" };
     }
 
+    public async Task<AuthServiceResult> LoginAsync(LoginRequest request)
+    {
+        var user = await _userManager.FindByEmailAsync(request.Email);
+        if (user is null)
+            return new AuthServiceResult { Succeeded = false, Error = "Invalid credentials" };
+
+        // (Valfritt) kräver bekräftad e-post
+        // if (!user.EmailConfirmed) return new AuthServiceResult { Succeeded = false, Error = "Email not confirmed" };
+
+        // SignInManager skapar auth-cookie vid lyckad inloggning
+        var result = await _signInManager.PasswordSignInAsync(
+         user,
+         request.Password,
+         isPersistent: false,      
+         lockoutOnFailure: false); 
+
+        if (result.Succeeded)
+            return new AuthServiceResult { Succeeded = true, Message = "Login successful" };
+
+        if (result.IsLockedOut)
+            return new AuthServiceResult { Succeeded = false, Error = "Locked out" };
+
+        if (result.IsNotAllowed)
+            return new AuthServiceResult { Succeeded = false, Error = "Not allowed" };
+        return new AuthServiceResult { Succeeded = false, Error = "Invalid credentials" };
+    }
+
     public async Task<AuthServiceResult> LogoutAsync()
     {
         await _signInManager.SignOutAsync();
