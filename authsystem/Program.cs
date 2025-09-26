@@ -2,9 +2,11 @@ using Data.Contexts;
 using Data.Entities;
 using Infrastructure.Interfaces;
 using Infrastructure.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +35,25 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     .AddEntityFrameworkStores<DataContext>()
     .AddDefaultTokenProviders();
 
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = ".myapp.id";
+        options.Cookie.HttpOnly = true;
+// Om SPA och API är på olika domäner/portar:
+        options.Cookie.SameSite = SameSiteMode.None;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+        options.SlidingExpiration = true;
+
+        // Viktigt i API: returnera 401/403 istället för redirect till LoginPath/AccessDeniedPath
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; },
+            OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; }
+        };
+    });
+
 var app = builder.Build();
 
 app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
@@ -57,3 +78,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+
+
