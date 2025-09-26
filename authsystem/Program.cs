@@ -41,13 +41,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     {
         options.Cookie.Name = ".myapp.id";
         options.Cookie.HttpOnly = true;
-// Om SPA och API är på olika domäner/portar:
+// Om SPA och API ï¿½r pï¿½ olika domï¿½ner/portar:
         options.Cookie.SameSite = SameSiteMode.None;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 
         options.SlidingExpiration = true;
 
-        // Viktigt i API: returnera 401/403 istället för redirect till LoginPath/AccessDeniedPath
+        // Viktigt i API: returnera 401/403 istï¿½llet fï¿½r redirect till LoginPath/AccessDeniedPath
         options.Events = new CookieAuthenticationEvents
         {
             OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; },
@@ -55,9 +55,21 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         };
     });
 
+    builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy("spa", p =>
+        p.WithOrigins(
+            "http://localhost:5173"   // Vite dev
+            // lÃ¤gg till fler origins vid behov, t.ex. "https://app.min-domÃ¤n.se"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials()   // cookies!
+    );
+});
+
 var app = builder.Build();
 
-app.UseCors(x => x.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod().AllowCredentials());
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -73,7 +85,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthentication();
+app.UseCors("spa");
 app.UseAuthorization();
 
 app.MapControllers();
