@@ -54,6 +54,6 @@ public class AuthController(IAuthService authService, SignInManager<ApplicationU
         if (!result.Succeeded)
             return StatusCode(500, result.Error);
 
-        return NoContent();
+        return Ok("Logged out successfully");
     }
 }
