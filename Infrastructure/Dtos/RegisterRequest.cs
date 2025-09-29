@@ -20,19 +20,16 @@ public class RegisterRequest
     [MaxLength(50, ErrorMessage = "Lastname cannot exceed 50 characters")]
     public string Lastname { get; set; } = null!;
 
-    [Required(ErrorMessage = "Email is required")]
-    [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d]+$",
-        ErrorMessage = "Invalid email address")]
-    // Exempel: user@example.com, test.user123@gmail.com, my-name@domain.co.uk
+    [Required(ErrorMessage = "You must enter your email address.")]
+    [RegularExpression(@"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$", ErrorMessage = "Invalid email address")]
     public string Email { get; set; } = null!;
 
     [Required(ErrorMessage = "Password is required")]
     [MinLength(6, ErrorMessage = "Password must be at least 6 characters")]
     [MaxLength(20, ErrorMessage = "Password cannot exceed 20 characters")]
-    // Exempel på krav: minst 1 stor bokstav, 1 liten bokstav, 1 siffra,
-    // Exempel: Test123, Hello1World, Abc123
-    [RegularExpression(@"^(?=.*[A-Z])(?=.*\d)[A-Za-z\d]+$",
-        ErrorMessage = "Password must contain upper, and number")]
+    // Tillåt valfria tecken, men kräv minst 1 bokstav och 1 siffra (6–20 tecken)
+    [RegularExpression(@"^(?=.*[A-Za-z])(?=.*\d).{6,20}$",
+        ErrorMessage = "Password must be 6–20 characters and include at least one letter and one digit")]
     public string Password { get; set; } = null!;
 
     [Required(ErrorMessage = "Confirm password is required")]

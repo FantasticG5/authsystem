@@ -9,4 +9,6 @@ public interface IAuthService
 
     Task<AuthServiceResult> LogoutAsync();
     Task<AuthServiceResult> LoginAsync(LoginRequest request);
+
+    Task<AuthServiceResult> ChangePasswordAsync(string userId, ChangePasswordRequest request);
 }
