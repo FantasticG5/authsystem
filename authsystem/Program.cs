@@ -3,94 +3,82 @@ using Data.Entities;
 using Infrastructure.Interfaces;
 using Infrastructure.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ===== EF Core =====
+builder.Services.AddDbContext<DataContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
 
-builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// ===== DataProtection (delad nyckelring mellan tjänster) =====
+var keysPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "CoreGym", "dp-keys"
+);
+Directory.CreateDirectory(keysPath);
 
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+    .SetApplicationName("CoreGym"); // MÅSTE matcha AuthSystem
 
-builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
-builder.Services.AddDbContext<DataContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
-
-builder.Services.AddScoped<IAuthService,AuthService>();
-builder.Services.AddScoped<IJwtService, JwtService>();
-
-
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
-    {
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 6;
-    options.User.RequireUniqueEmail = true;
-    options.Password.RequireUppercase = true;
-})
-    .AddEntityFrameworkStores<DataContext>()
-    .AddDefaultTokenProviders();
-
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(options =>
-    {
-        options.Cookie.Name = ".myapp.id";
-        options.Cookie.HttpOnly = true;
-// Om SPA och API �r p� olika dom�ner/portar:
-        options.Cookie.SameSite = SameSiteMode.None;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-
-        options.SlidingExpiration = true;
-
-        // Viktigt i API: returnera 401/403 ist�llet f�r redirect till LoginPath/AccessDeniedPath
-        options.Events = new CookieAuthenticationEvents
-        {
-            OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; },
-            OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; }
-        };
-    });
-
-    builder.Services.AddCors(opt =>
+// ===== Identity (utfärdar cookie) =====
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>(opt =>
 {
-    opt.AddPolicy("spa", p =>
-        p.WithOrigins(
-            "http://localhost:5173"   // Vite dev
-            // lägg till fler origins vid behov, t.ex. "https://app.min-domän.se"
-        )
+    opt.Password.RequiredLength = 6;
+    opt.User.RequireUniqueEmail = true;
+})
+.AddEntityFrameworkStores<DataContext>()
+.AddDefaultTokenProviders();
+
+// ===== Cookie Auth =====
+builder.Services.ConfigureApplicationCookie(o =>
+{
+    o.Cookie.Name = ".myapp.id";
+    o.Cookie.HttpOnly = true;
+    o.Cookie.SameSite = SameSiteMode.None;             // för cross-site
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always; // kräver HTTPS
+
+    // API ska inte redirecta, returnera koder:
+    o.Events = new Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationEvents
+    {
+        OnRedirectToLogin = ctx => { ctx.Response.StatusCode = 401; return Task.CompletedTask; },
+        OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = 403; return Task.CompletedTask; }
+    };
+});
+
+builder.Services.AddAuthorization();
+
+// ===== CORS: hårdkodat origin =====
+const string SpaCors = "spa";
+string[] allowedOrigins = { "https://fantasticg5-dmdbeshvcmfxe6ey.northeurope-01.azurewebsites.net", "http://localhost:5173", "https://localhost:5173" };
+
+builder.Services.AddCors(opt =>
+{
+    opt.AddPolicy(SpaCors, p => p
+        .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials()   // cookies!
-    );
+        .AllowCredentials());
 });
+
+builder.Services.AddControllers();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(c =>
-{
-    c.RoutePrefix = string.Empty;
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Auth Service Api");
-});
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Auth API"));
 
 app.UseHttpsRedirection();
-
-app.UseCors("spa");
+app.UseCors(SpaCors);
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
 app.Run();
-
-
-

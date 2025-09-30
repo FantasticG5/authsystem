@@ -1,4 +1,5 @@
-﻿using Data.Entities;
+﻿using System.Security.Claims;
+using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +45,28 @@ public class AuthController(IAuthService authService, SignInManager<ApplicationU
 
         // Här skapas en auth-cookie automatiskt
         return Ok("Login successful.");
+    }
+
+    [HttpGet("me")]
+    public async Task<IActionResult> Me()
+    {
+        // plocka userId från claims
+        var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(idClaim))
+            return Unauthorized();
+
+        // hämta användaren från Identity
+        var user = await _userManager.GetUserAsync(User);
+        if (user is null)
+            return Unauthorized();
+
+        return Ok(new
+        {
+            id = user.Id,
+            email = user.Email,
+            userName = user.UserName,
+            // lägg till fler fält om du har, ex FullName
+        });
     }
 
     [HttpPost("logout")]
