@@ -114,6 +114,11 @@ public class AuthService(UserManager<ApplicationUser> userManager,
         return new AuthServiceResult { Succeeded = true, Message = "Password changed successfully." };
     }
 
+    /// <summary>
+    /// Checks if an email already exists in the database
+    /// </summary>
+    /// <param name="email">Email</param>
+    /// <returns>Succeeded false = email exists, true= email free</returns>
     public async Task<AuthServiceResult> ExistsEmailAsync(string email)
     {
         var user = await _userManager.FindByEmailAsync(email);
