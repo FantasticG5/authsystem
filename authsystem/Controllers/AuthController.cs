@@ -2,6 +2,7 @@
 using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -78,5 +79,19 @@ public class AuthController(IAuthService authService, SignInManager<ApplicationU
             return StatusCode(500, result.Error);
 
         return Ok("Logged out successfully");
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        var userId = _userManager.GetUserId(User);
+
+        if (string.IsNullOrEmpty(userId)) return Unauthorized();
+
+        var result = await _authService.ChangePasswordAsync(userId, request);
+        return result.Succeeded ? Ok(result.Message) : BadRequest(new { error = result.Error });
     }
 }

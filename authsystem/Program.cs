@@ -23,6 +23,14 @@ Directory.CreateDirectory(keysPath);
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
     .SetApplicationName("CoreGym"); // MÅSTE matcha AuthSystem
+builder.Services.AddControllers();
+
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keysPath))
+    .SetApplicationName("CoreGym"); // MÅSTE matcha AuthSystem
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 
