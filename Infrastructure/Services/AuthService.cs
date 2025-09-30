@@ -22,6 +22,18 @@ public class AuthService(UserManager<ApplicationUser> userManager,
             UserName = request.Email
         };
 
+        var emailExists = await ExistsEmailAsync(request.Email);
+        
+        if (!emailExists.Succeeded)
+        {
+            return new AuthServiceResult
+            {
+                Succeeded = false,
+                Error = "Email already exists",
+                Message = "This email address is already taken."
+            };
+        }
+
         if (request.Password != request.ConfirmedPassword)
         {
             return new AuthServiceResult
@@ -100,5 +112,25 @@ public class AuthService(UserManager<ApplicationUser> userManager,
         await _signInManager.RefreshSignInAsync(user);
 
         return new AuthServiceResult { Succeeded = true, Message = "Password changed successfully." };
+    }
+
+    public async Task<AuthServiceResult> ExistsEmailAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+
+        if (user is not null)
+        {
+            return new AuthServiceResult
+            {
+                Succeeded = false,
+                Error = "Email already exists."
+            };
+        }
+
+        return new AuthServiceResult
+        {
+            Succeeded = true,
+            Message = "Email is available."
+        };
     }
 }
