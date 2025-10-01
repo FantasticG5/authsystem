@@ -1,4 +1,5 @@
-﻿using Infrastructure.Dtos;
+﻿using System.Security.Claims;
+using Infrastructure.Dtos;
 using Infrastructure.Models;
 
 namespace Infrastructure.Interfaces;
@@ -11,4 +12,7 @@ public interface IAuthService
     Task<AuthServiceResult> LoginAsync(LoginRequest request);
 
     Task<AuthServiceResult> ChangePasswordAsync(string userId, ChangePasswordRequest request);
+
+    Task<AuthServiceResult<UserProfileDto>> GetMyProfileAsync(ClaimsPrincipal user);
+    Task<AuthServiceResult<UserProfileDto>> UpdateMyProfileAsync(ClaimsPrincipal user, UpdateProfileRequest request);
 }

@@ -15,3 +15,8 @@ public class AuthServiceResult
     public string? Token { get; set; }
 
 }
+
+public class AuthServiceResult<T> : AuthServiceResult
+{
+    public T? Data { get; set; }
+}

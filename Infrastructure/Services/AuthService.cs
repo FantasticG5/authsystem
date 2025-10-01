@@ -1,4 +1,5 @@
-﻿using Data.Entities;
+﻿using System.Security.Claims;
+using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Infrastructure.Models;
@@ -136,6 +137,85 @@ public class AuthService(UserManager<ApplicationUser> userManager,
         {
             Succeeded = true,
             Message = "Email is available."
+        };
+    }
+
+    //Hämta profil för inloggad användare
+    public async Task<AuthServiceResult<UserProfileDto>> GetMyProfileAsync(ClaimsPrincipal userClaims)
+    {
+        var user = await _userManager.GetUserAsync(userClaims);
+        if (user is null)
+            return new AuthServiceResult<UserProfileDto>
+            {
+                Succeeded = false,
+                Error = "Unauthorized"
+            };
+
+        var dto = new UserProfileDto
+        {
+            Id = user.Id,
+            Firstname = user.Firstname,
+            Lastname = user.Lastname,
+            Email = user.Email ?? string.Empty,
+            PhoneNumber = user.PhoneNumber
+        };
+
+        return new AuthServiceResult<UserProfileDto>
+        {
+            Succeeded = true,
+            Data = dto
+        };
+    }
+
+    //Uppdatera profil för inloggad användare
+    public async Task<AuthServiceResult<UserProfileDto>> UpdateMyProfileAsync(
+        ClaimsPrincipal userClaims,
+        UpdateProfileRequest request)
+    {
+        if (request is null)
+            return new AuthServiceResult<UserProfileDto>
+            {
+                Succeeded = false,
+                Error = "Invalid request."
+            };
+
+        var user = await _userManager.GetUserAsync(userClaims);
+        if (user is null)
+            return new AuthServiceResult<UserProfileDto>
+            {
+                Succeeded = false,
+                Error = "Unauthorized"
+            };
+
+        user.Firstname = request.Firstname;
+        user.Lastname = request.Lastname;
+        user.PhoneNumber = request.PhoneNumber;
+
+        var res = await _userManager.UpdateAsync(user);
+        if (!res.Succeeded)
+        {
+            var error = string.Join("; ", res.Errors.Select(e => e.Description));
+            return new AuthServiceResult<UserProfileDto>
+            {
+                Succeeded = false,
+                Error = error
+            };
+        }
+
+        var dto = new UserProfileDto
+        {
+            Id = user.Id,
+            Firstname = user.Firstname,
+            Lastname = user.Lastname,
+            Email = user.Email ?? string.Empty,
+            PhoneNumber = user.PhoneNumber
+        };
+
+        return new AuthServiceResult<UserProfileDto>
+        {
+            Succeeded = true,
+            Message = "Ändringarna är sparade",
+            Data = dto
         };
     }
 }
