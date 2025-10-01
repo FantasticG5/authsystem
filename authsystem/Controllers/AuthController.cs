@@ -2,6 +2,7 @@
 using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -93,5 +94,37 @@ public class AuthController(IAuthService authService, SignInManager<ApplicationU
 
         var result = await _authService.ChangePasswordAsync(userId, request);
         return result.Succeeded ? Ok(result.Message) : BadRequest(new { error = result.Error });
+    }
+
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    [HttpPut("me")]
+    public async Task<IActionResult> UpdateMe([FromBody] UpdateProfileRequest request)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _authService.UpdateMyProfileAsync(User, request);
+
+        if (!result.Succeeded)
+        {
+            if (string.Equals(result.Error, "Unauthorized", StringComparison.OrdinalIgnoreCase))
+                return Unauthorized();
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return Ok(new
+        {
+            message = result.Message ?? "Ändringarna är sparade",
+            user = new
+            {
+                id = result.Data!.Id,
+                email = result.Data!.Email,
+                userName = result.Data!.Email,
+                firstname = result.Data!.Firstname,
+                lastname = result.Data!.Lastname,
+                phoneNumber = result.Data!.PhoneNumber
+            }
+        });
     }
 }
