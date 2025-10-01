@@ -1,10 +1,11 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿// Infrastructure/Services/AuthService.cs
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Infrastructure.Models;
-using Infrastructure.option;
+using Infrastructure.option;                  // du kör 'option' med litet o
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -35,12 +36,17 @@ public class AuthService : IAuthService
         if (req.Password != req.ConfirmedPassword)
             return ApiResult<object>.Fail("Passwords do not match");
 
+        // extra skydd: kolla email innan CreateAsync
+        var existing = await _userManager.FindByEmailAsync(req.Email);
+        if (existing is not null)
+            return ApiResult<object>.Fail("Email already exists");
+
         var user = new ApplicationUser
         {
             Firstname = req.Firstname,
-            Lastname = req.Lastname,
-            Email = req.Email,
-            UserName = req.Email
+            Lastname  = req.Lastname,
+            Email     = req.Email,
+            UserName  = req.Email
         };
 
         var result = await _userManager.CreateAsync(user, req.Password);
@@ -50,42 +56,47 @@ public class AuthService : IAuthService
             return ApiResult<object>.Fail(msg);
         }
 
+        // returdata minimal – lägg till mer om du vill
         return ApiResult<object>.Ok(new { user.Id, user.Email });
     }
 
     public async Task<ApiResult<LoginResponse>> LoginAsync(LoginRequest req)
     {
         var user = await _userManager.FindByEmailAsync(req.Email);
-        if (user is null) return ApiResult<LoginResponse>.Fail("Invalid credentials");
+        if (user is null)
+            return ApiResult<LoginResponse>.Fail("Invalid credentials");
 
         var ok = await _userManager.CheckPasswordAsync(user, req.Password);
-        if (!ok) return ApiResult<LoginResponse>.Fail("Invalid credentials");
+        if (!ok)
+            return ApiResult<LoginResponse>.Fail("Invalid credentials");
 
         var roles = await _userManager.GetRolesAsync(user);
-        var (access, aexp) = _jwtService.CreateAccessToken(user, roles);
-        var (refresh, rexp) = _jwtService.CreateRefreshToken(user);
+
+        var (access, aexp)   = _jwtService.CreateAccessToken(user, roles);
+        var (refresh, rexp)  = _jwtService.CreateRefreshToken(user);
 
         return ApiResult<LoginResponse>.Ok(new LoginResponse
         {
-            AccessToken = access,
-            AccessExpiresUtc = aexp,
-            RefreshToken = refresh,
+            AccessToken       = access,
+            AccessExpiresUtc  = aexp,
+            RefreshToken      = refresh,
             RefreshExpiresUtc = rexp
         });
     }
 
+    // Self-contained refresh, validerar refresh-JWT utan DB
     public async Task<ApiResult<LoginResponse>> RefreshAsync(string refreshJwt)
     {
         var handler = new JwtSecurityTokenHandler();
         var tvp = new TokenValidationParameters
         {
-            ValidIssuer = _opt.Issuer,
-            ValidAudience = _opt.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(_opt.RefreshKey)),
-            ValidateIssuer = true,
-            ValidateAudience = true,
+            ValidIssuer          = _opt.Issuer,
+            ValidAudience        = _opt.Audience,
+            IssuerSigningKey     = new SymmetricSecurityKey(Convert.FromBase64String(_opt.RefreshKey)),
+            ValidateIssuer       = true,
+            ValidateAudience     = true,
             ValidateIssuerSigningKey = true,
-            ValidateLifetime = true
+            ValidateLifetime     = true
         };
 
         ClaimsPrincipal principal;
@@ -100,24 +111,26 @@ public class AuthService : IAuthService
             return ApiResult<LoginResponse>.Fail("Invalid refresh token");
 
         var user = await _userManager.FindByIdAsync(userId);
-        if (user is null) return ApiResult<LoginResponse>.Fail("User not found");
+        if (user is null)
+            return ApiResult<LoginResponse>.Fail("User not found");
 
         var roles = await _userManager.GetRolesAsync(user);
-        var (access, aexp) = _jwtService.CreateAccessToken(user, roles);
+        var (access, aexp)   = _jwtService.CreateAccessToken(user, roles);
         var (newRefresh, rexp) = _jwtService.CreateRefreshToken(user);
 
         return ApiResult<LoginResponse>.Ok(new LoginResponse
         {
-            AccessToken = access,
-            AccessExpiresUtc = aexp,
-            RefreshToken = newRefresh,
+            AccessToken       = access,
+            AccessExpiresUtc  = aexp,
+            RefreshToken      = newRefresh,
             RefreshExpiresUtc = rexp
         });
     }
 
     public async Task<AuthServiceResult> LogoutAsync()
     {
-        // JWT är stateless – ingen riktig “logout”; detta påverkar ev. cookie-sess. Behåll eller ta bort.
+        // JWT är stateless – att rensa tokens på klienten räcker.
+        // Behåll sign-out om du någon gång kör cookies i andra flöden.
         await _signInManager.SignOutAsync();
         return new AuthServiceResult { Succeeded = true, Message = "Signed out" };
     }
@@ -139,5 +152,29 @@ public class AuthService : IAuthService
         }
 
         return new AuthServiceResult { Succeeded = true, Message = "Password changed successfully." };
+    }
+
+    /// <summary>
+    /// Checks if an email already exists in the database.
+    /// Succeeded=false => email exists, true => email free.
+    /// </summary>
+    public async Task<AuthServiceResult> ExistsEmailAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+
+        if (user is not null)
+        {
+            return new AuthServiceResult
+            {
+                Succeeded = false,
+                Error = "Email already exists."
+            };
+        }
+
+        return new AuthServiceResult
+        {
+            Succeeded = true,
+            Message = "Email is available."
+        };
     }
 }
