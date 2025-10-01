@@ -5,10 +5,11 @@ namespace Infrastructure.Interfaces;
 
 public interface IAuthService
 {
-    Task<AuthServiceResult> RegisterAsync(RegisterRequest request);
+    Task<ApiResult<object>> RegisterAsync(RegisterRequest request);
+    Task<ApiResult<LoginResponse>> LoginAsync(LoginRequest request);
+    Task<ApiResult<LoginResponse>> RefreshAsync(string refreshJwt);
 
+    // valfritt att behålla dessa två; de kan vara no-op i JWT-världen
     Task<AuthServiceResult> LogoutAsync();
-    Task<AuthServiceResult> LoginAsync(LoginRequest request);
-
     Task<AuthServiceResult> ChangePasswordAsync(string userId, ChangePasswordRequest request);
 }

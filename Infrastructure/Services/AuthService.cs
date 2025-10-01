@@ -1,84 +1,125 @@
-﻿using Data.Entities;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
 using Infrastructure.Models;
+using Infrastructure.option;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Infrastructure.Services;
 
-public class AuthService(UserManager<ApplicationUser> userManager,
-                   SignInManager<ApplicationUser> signInManager) : IAuthService
+public class AuthService : IAuthService
 {
-    private readonly UserManager<ApplicationUser> _userManager = userManager;
-    private readonly SignInManager<ApplicationUser> _signInManager = signInManager;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly JwtOptions _opt;
+    private readonly IJwtTokenService _jwtService;
 
-    public async Task<AuthServiceResult> RegisterAsync(RegisterRequest request)
+    public AuthService(
+        UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
+        IOptions<JwtOptions> opt,
+        IJwtTokenService jwtService)
     {
-        var user = new ApplicationUser
-        {
-            Firstname = request.Firstname,
-            Lastname = request.Lastname,
-            Email = request.Email,
-            UserName = request.Email
-        };
-
-        if (request.Password != request.ConfirmedPassword)
-        {
-            return new AuthServiceResult
-            {
-                Succeeded = false,
-                Error = "Passwords do not match",
-                Message = "The password and confirmed password must be the same."
-            };
-        }
-
-        var result = await _userManager.CreateAsync(user, request.Password);
-
-        string errorMessage = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
-
-
-        await _signInManager.SignInAsync(user, isPersistent: false);
-
-        return result.Succeeded
-            ? new AuthServiceResult { Succeeded = true }
-            : new AuthServiceResult { Succeeded = false, Error = errorMessage, Message = "Failed to create user, debuga för mer info" };
+        _userManager = userManager;
+        _signInManager = signInManager;
+        _opt = opt.Value;
+        _jwtService = jwtService;
     }
 
-    public async Task<AuthServiceResult> LoginAsync(LoginRequest request)
+    public async Task<ApiResult<object>> RegisterAsync(RegisterRequest req)
     {
-        var user = await _userManager.FindByEmailAsync(request.Email);
-        if (user is null)
-            return new AuthServiceResult { Succeeded = false, Error = "Invalid credentials" };
+        if (req.Password != req.ConfirmedPassword)
+            return ApiResult<object>.Fail("Passwords do not match");
 
-        // (Valfritt) kräver bekräftad e-post
-        // if (!user.EmailConfirmed) return new AuthServiceResult { Succeeded = false, Error = "Email not confirmed" };
+        var user = new ApplicationUser
+        {
+            Firstname = req.Firstname,
+            Lastname = req.Lastname,
+            Email = req.Email,
+            UserName = req.Email
+        };
 
-        // SignInManager skapar auth-cookie vid lyckad inloggning
-        var result = await _signInManager.PasswordSignInAsync(
-         user,
-         request.Password,
-         isPersistent: false,
-         lockoutOnFailure: false);
+        var result = await _userManager.CreateAsync(user, req.Password);
+        if (!result.Succeeded)
+        {
+            var msg = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
+            return ApiResult<object>.Fail(msg);
+        }
 
-        if (result.Succeeded)
-            return new AuthServiceResult { Succeeded = true, Message = "Login successful" };
+        return ApiResult<object>.Ok(new { user.Id, user.Email });
+    }
 
-        if (result.IsLockedOut)
-            return new AuthServiceResult { Succeeded = false, Error = "Locked out" };
+    public async Task<ApiResult<LoginResponse>> LoginAsync(LoginRequest req)
+    {
+        var user = await _userManager.FindByEmailAsync(req.Email);
+        if (user is null) return ApiResult<LoginResponse>.Fail("Invalid credentials");
 
-        if (result.IsNotAllowed)
-            return new AuthServiceResult { Succeeded = false, Error = "Not allowed" };
-        return new AuthServiceResult { Succeeded = false, Error = "Invalid credentials" };
+        var ok = await _userManager.CheckPasswordAsync(user, req.Password);
+        if (!ok) return ApiResult<LoginResponse>.Fail("Invalid credentials");
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var (access, aexp) = _jwtService.CreateAccessToken(user, roles);
+        var (refresh, rexp) = _jwtService.CreateRefreshToken(user);
+
+        return ApiResult<LoginResponse>.Ok(new LoginResponse
+        {
+            AccessToken = access,
+            AccessExpiresUtc = aexp,
+            RefreshToken = refresh,
+            RefreshExpiresUtc = rexp
+        });
+    }
+
+    public async Task<ApiResult<LoginResponse>> RefreshAsync(string refreshJwt)
+    {
+        var handler = new JwtSecurityTokenHandler();
+        var tvp = new TokenValidationParameters
+        {
+            ValidIssuer = _opt.Issuer,
+            ValidAudience = _opt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(_opt.RefreshKey)),
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true
+        };
+
+        ClaimsPrincipal principal;
+        try { principal = handler.ValidateToken(refreshJwt, tvp, out _); }
+        catch { return ApiResult<LoginResponse>.Fail("Invalid refresh token"); }
+
+        if (principal.FindFirst("typ")?.Value != "refresh")
+            return ApiResult<LoginResponse>.Fail("Invalid refresh token");
+
+        var userId = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        if (string.IsNullOrWhiteSpace(userId))
+            return ApiResult<LoginResponse>.Fail("Invalid refresh token");
+
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user is null) return ApiResult<LoginResponse>.Fail("User not found");
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var (access, aexp) = _jwtService.CreateAccessToken(user, roles);
+        var (newRefresh, rexp) = _jwtService.CreateRefreshToken(user);
+
+        return ApiResult<LoginResponse>.Ok(new LoginResponse
+        {
+            AccessToken = access,
+            AccessExpiresUtc = aexp,
+            RefreshToken = newRefresh,
+            RefreshExpiresUtc = rexp
+        });
     }
 
     public async Task<AuthServiceResult> LogoutAsync()
     {
+        // JWT är stateless – ingen riktig “logout”; detta påverkar ev. cookie-sess. Behåll eller ta bort.
         await _signInManager.SignOutAsync();
-        return new AuthServiceResult
-        {
-            Succeeded = true,
-            Message = "Signed out"
-        };
+        return new AuthServiceResult { Succeeded = true, Message = "Signed out" };
     }
 
     public async Task<AuthServiceResult> ChangePasswordAsync(string userId, ChangePasswordRequest request)
@@ -96,8 +137,6 @@ public class AuthService(UserManager<ApplicationUser> userManager,
             var errorMessage = string.Join("; ", result.Errors.Select(e => $"{e.Code}: {e.Description}"));
             return new AuthServiceResult { Succeeded = false, Error = errorMessage };
         }
-
-        await _signInManager.RefreshSignInAsync(user);
 
         return new AuthServiceResult { Succeeded = true, Message = "Password changed successfully." };
     }

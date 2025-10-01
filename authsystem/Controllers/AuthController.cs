@@ -2,6 +2,7 @@
 using Data.Entities;
 using Infrastructure.Dtos;
 using Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -20,55 +21,51 @@ public class AuthController(IAuthService authService, SignInManager<ApplicationU
 
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
-        var result = await _authService.RegisterAsync(request);
+        var reg = await _authService.RegisterAsync(request);
+        if (!reg.Succeeded)
+            return BadRequest(new { error = reg.Error });
 
-        if (!result.Succeeded)
+        // Autologga in med samma credsen och returnera tokens
+        var loginRes = await _authService.LoginAsync(new LoginRequest
         {
-            return BadRequest(result.Error);
-        }
+            Email = request.Email,
+            Password = request.Password
+        });
 
-        return Ok("User registered successfully.");
+        if (!loginRes.Succeeded)
+            return StatusCode(500, new { error = "Registration succeeded but auto-login failed." });
+
+        // Viktigt: returnera tokenpayloaden så klienten kan spara tokens
+        return Ok(loginRes);           // eller return Ok(loginRes.Data);
     }
 
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginRequest request)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(ModelState);
+public async Task<IActionResult> Login([FromBody] LoginRequest request)
+{
+    if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var result = await _authService.LoginAsync(request);
+    var result = await _authService.LoginAsync(request);
+    if (!result.Succeeded)
+        return Unauthorized(new { error = "Invalid credentials" });
 
+    return Ok(result); // eller Ok(result.Data)
+}
 
-        if (!result.Succeeded)
-            return Unauthorized("Invalid credentials.");
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+[HttpGet("me")]
+public async Task<IActionResult> Me()
+{
+    var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+              ?? User.FindFirst("sub")?.Value;
+    if (string.IsNullOrEmpty(userId)) return Unauthorized();
 
-        // Här skapas en auth-cookie automatiskt
-        return Ok("Login successful.");
-    }
+    var user = await _userManager.FindByIdAsync(userId);
+    if (user is null) return Unauthorized();
 
-    [HttpGet("me")]
-    public async Task<IActionResult> Me()
-    {
-        // plocka userId från claims
-        var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(idClaim))
-            return Unauthorized();
-
-        // hämta användaren från Identity
-        var user = await _userManager.GetUserAsync(User);
-        if (user is null)
-            return Unauthorized();
-
-        return Ok(new
-        {
-            id = user.Id,
-            email = user.Email,
-            userName = user.UserName,
-            // lägg till fler fält om du har, ex FullName
-        });
-    }
+    return Ok(new { id = user.Id, email = user.Email, userName = user.UserName });
+}
 
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
